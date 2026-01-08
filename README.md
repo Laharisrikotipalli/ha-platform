@@ -22,21 +22,6 @@ The platform is designed to:
 
 ---
 
-#### Architecture Flow
-
-User
-|
-|--> Kubernetes Service (NodePort / Port-Forward)
-|
-|--> Web Application Deployment (3 replicas - Node.js)
-|
-|--> PostgreSQL StatefulSet (3 replicas)
-|
-|--> Persistent Volume Claims (PVCs)
-
-
----
-
 #### Architecture Components
 
 - Kubernetes Service exposes the web application
@@ -47,7 +32,7 @@ User
 
 ---
 
-### 🛠 Prerequisites
+### Prerequisites
 
 Ensure the following tools are installed:
 
@@ -60,19 +45,19 @@ Ensure the following tools are installed:
 
 ---
 
-### 🐳 Application Logic Verification (Docker)
+### Application Logic Verification (Docker)
 
 The application is validated using Docker Compose before Kubernetes deployment.
 
 ```bash
 docker-compose down
 docker-compose up --build
-
+```
 
 Verify application response:
-
+```
 curl http://localhost:3000
-
+```
 
 Expected output:
 
@@ -87,33 +72,36 @@ Database connectivity works
 
 API is reachable
 
-☸️ Kubernetes Deployment
+---
+
+### Kubernetes Deployment
 
 Start Minikube:
-
+```
 minikube start
-
+```
 
 Verify node status:
-
+```
 kubectl get nodes
-
+```
 
 Apply Kubernetes manifests:
-
+```
 kubectl apply -f k8s/
-
+```
 
 Set namespace context:
-
+```
 kubectl config set-context --current --namespace=ha-platform
-
+```
 
 Verify pods:
-
+```
 kubectl get pods
-
-🗄 Database Configuration (StatefulSet)
+```
+----
+### Database Configuration (StatefulSet)
 
 PostgreSQL runs as a StatefulSet
 
@@ -124,14 +112,16 @@ Headless service provides stable network identity
 Data persists across pod restarts and node drain
 
 Verify database resources:
-
+```
 kubectl get statefulsets
 kubectl get pvc
-
+```
 
 All PVCs should be in Bound state.
 
-🔐 Configuration & Secrets
+---
+
+### Configuration & Secrets
 
 ConfigMaps store non-sensitive configuration
 
@@ -140,31 +130,35 @@ Secrets store database credentials
 No credentials are hardcoded in manifests or source code
 
 Verify:
-
+```
 kubectl get configmaps
 kubectl get secrets
+```
+---
 
-🩺 Health Checks
+### Health Checks
 
 The web application uses HTTP-based probes.
 
 Liveness Probe
-
+```
 Endpoint: /health
-
+```
 Restarts container if unhealthy
 
 Readiness Probe
-
+```
 Endpoint: /ready
-
+```
 Prevents traffic to unready pods
 
 Verify probes:
-
+```
 kubectl describe deployment web-app
+```
+---
 
-🔄 Rolling Updates & High Availability
+### Rolling Updates & High Availability
 
 Deployment uses RollingUpdate strategy
 
@@ -174,25 +168,29 @@ Pod Anti-Affinity distributes pods
 
 PodDisruptionBudgets protect minimum replicas
 
-🌐 Service Access
+---
+
+### Service Access
 
 The application is exposed using a Kubernetes Service.
 
 Due to Minikube Docker driver limitations on Windows, access is verified using port-forwarding:
-
+```
 kubectl port-forward svc/web-service 3000:3000
-
+```
 
 Verify access:
-
+```
 curl http://localhost:3000
+```
+---
 
-🔁 Resilience & Self-Healing Test (Node Drain)
+### Resilience & Self-Healing Test (Node Drain)
 
 Drain the node:
-
+```
 kubectl drain minikube --ignore-daemonsets --force
-
+```
 
 During drain:
 
@@ -203,23 +201,23 @@ Kubernetes recreates pods automatically
 PodDisruptionBudgets prevent unsafe evictions
 
 Watch recovery:
-
+```
 kubectl get pods -w
-
+```
 
 Restore node:
-
+```
 kubectl uncordon minikube
-
-✅ Final Health Verification
+```
+#### Final Health Verification
 
 Verify system stability:
-
+```
 kubectl get pods
 kubectl get pvc
+```
 
-
-Results:
+#### Results:
 
 All pods return to Running and Ready state
 
@@ -227,7 +225,9 @@ All PVCs remain Bound
 
 Database storage is preserved
 
-🏁 Conclusion
+---
+
+### Conclusion
 
 This project successfully demonstrates:
 
@@ -241,11 +241,9 @@ Production-grade health checks and deployment strategies
 
 The platform meets all core requirements and is fully resilient.
 
-📸 Evidence
-
 ---
 
-### 📸 Evidence & Screenshots
+### Evidence & Screenshots
 
 | Step | Description | Screenshot |
 |-----|-------------|------------|
