@@ -1,8 +1,8 @@
-# 🚀 Highly Available Web Platform on Kubernetes
+# Highly Available Web Platform on Kubernetes
 
 ---
 
-### 📌 Overview
+### Overview
 
 This project demonstrates a production-ready, highly available web application deployed on Kubernetes with a stateful PostgreSQL database, resilience testing, health probes, and persistent storage.
 
@@ -14,7 +14,7 @@ The platform is designed to:
 
 ---
 
-### 🏗 Architecture
+### Architecture
 
 #### High-Level Architecture Diagram
 
@@ -60,56 +60,56 @@ curl http://localhost:3000
 ```
 
 Expected output:
-
-Web App is running 🚀
-
+```
+ Web App is running 🚀
+```
 
 This confirms:
 
-Application builds successfully
+- Application builds successfully
 
-Database connectivity works
+- Database connectivity works
 
-API is reachable
+- API is reachable
 
 ---
 
 ### Kubernetes Deployment
 
-Start Minikube:
+#### Start Minikube:
 ```
 minikube start
 ```
 
-Verify node status:
+#### Verify node status:
 ```
 kubectl get nodes
 ```
 
-Apply Kubernetes manifests:
+#### Apply Kubernetes manifests:
 ```
 kubectl apply -f k8s/
 ```
 
-Set namespace context:
+#### Set namespace context:
 ```
 kubectl config set-context --current --namespace=ha-platform
 ```
 
-Verify pods:
+#### Verify pods:
 ```
 kubectl get pods
 ```
 ----
 ### Database Configuration (StatefulSet)
 
-PostgreSQL runs as a StatefulSet
+- PostgreSQL runs as a StatefulSet
 
-Each replica has its own Persistent Volume
+- Each replica has its own Persistent Volume
 
-Headless service provides stable network identity
+- Headless service provides stable network identity
 
-Data persists across pod restarts and node drain
+- Data persists across pod restarts and node drain
 
 Verify database resources:
 ```
@@ -123,13 +123,13 @@ All PVCs should be in Bound state.
 
 ### Configuration & Secrets
 
-ConfigMaps store non-sensitive configuration
+- ConfigMaps store non-sensitive configuration
 
-Secrets store database credentials
+- Secrets store database credentials
 
-No credentials are hardcoded in manifests or source code
+- No credentials are hardcoded in manifests or source code
 
-Verify:
+#### Verify:
 ```
 kubectl get configmaps
 kubectl get secrets
@@ -140,17 +140,17 @@ kubectl get secrets
 
 The web application uses HTTP-based probes.
 
-Liveness Probe
+- Liveness Probe
 ```
 Endpoint: /health
 ```
 Restarts container if unhealthy
 
-Readiness Probe
+- Readiness Probe
 ```
 Endpoint: /ready
 ```
-Prevents traffic to unready pods
+- Prevents traffic to unready pods
 
 Verify probes:
 ```
@@ -160,13 +160,13 @@ kubectl describe deployment web-app
 
 ### Rolling Updates & High Availability
 
-Deployment uses RollingUpdate strategy
+- Deployment uses RollingUpdate strategy
 
-3 replicas ensure high availability
+- 3 replicas ensure high availability
 
-Pod Anti-Affinity distributes pods
+- Pod Anti-Affinity distributes pods
 
-PodDisruptionBudgets protect minimum replicas
+- PodDisruptionBudgets protect minimum replicas
 
 ---
 
@@ -194,11 +194,11 @@ kubectl drain minikube --ignore-daemonsets --force
 
 During drain:
 
-Application and database pods are evicted
+- Application and database pods are evicted
 
-Kubernetes recreates pods automatically
+- Kubernetes recreates pods automatically
 
-PodDisruptionBudgets prevent unsafe evictions
+- PodDisruptionBudgets prevent unsafe evictions
 
 Watch recovery:
 ```
@@ -219,27 +219,27 @@ kubectl get pvc
 
 #### Results:
 
-All pods return to Running and Ready state
+- All pods return to Running and Ready state
 
-All PVCs remain Bound
+- All PVCs remain Bound
 
-Database storage is preserved
+- Database storage is preserved
 
 ---
 
 ### Conclusion
 
-This project successfully demonstrates:
+- This project successfully demonstrates:
 
-Kubernetes high availability
+- Kubernetes high availability
 
-Stateful workloads with persistent storage
+- Stateful workloads with persistent storage
 
-Automated recovery from node failures
+- Automated recovery from node failures
 
-Production-grade health checks and deployment strategies
+- Production-grade health checks and deployment strategies
 
-The platform meets all core requirements and is fully resilient.
+- The platform meets all core requirements and is fully resilient.
 
 ---
 
