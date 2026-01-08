@@ -18,7 +18,7 @@ The platform is designed to:
 
 #### High-Level Architecture Diagram
 
-![Kubernetes Architecture](docs/archoitecture.ong)
+![Kubernetes Architecture](docs/architecture.png)
 
 ---
 
