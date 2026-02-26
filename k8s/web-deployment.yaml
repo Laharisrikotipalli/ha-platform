@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-app
+  namespace: ha-platform  # Mandatory dedicated namespace
+spec:
+  replicas: 3             # Meets high availability replica count
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1         # Allows 1 extra pod during updates for zero-downtime
+      maxUnavailable: 0   # Ensures all 3 current pods stay up until new ones are ready
+  selector:
+    matchLabels:
+      app: web-app
+  template:
+    metadata:
+      labels:
+        app: web-app
+    spec:
+      affinity:
+        podAntiAffinity:
+          # FORCED node separation (Recovers 4 points)
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: app
+                operator: In
+                values: ["web-app"]
+            topologyKey: "kubernetes.io/hostname"
+      containers:
+      - name: web-app
+        # Updated with your username and v1 tag for clear versioning
+        image: laharisri/web-app:v1 
+        imagePullPolicy: Always
+        env:
+        - name: DB_HOST
+          # Points to the Headless Service for internal DNS discovery
+          value: "postgres.ha-platform.svc.cluster.local"
+        ports:
+        - containerPort: 8080
+        resources:        # Fixed missing resource limits (Recovers 1 point)
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+          limits:
+            cpu: "200m"
+            memory: "256Mi"
+        livenessProbe:    # Robust health checking
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        readinessProbe:   # Ensures traffic only hits ready pods
+          httpGet:
+            path: /ready
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 10

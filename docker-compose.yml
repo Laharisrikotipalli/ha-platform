@@ -1,0 +1,21 @@
+services:
+  db:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres_pass  # MUST MATCH BELOW
+      - POSTGRES_DB=postgres
+    ports:
+      - "5432:5432"
+
+  web:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      - DB_HOST=db
+      - DB_NAME=postgres
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres_pass  # MUST MATCH ABOVE
+    depends_on:
+      - db
