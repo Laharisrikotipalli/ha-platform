@@ -18,7 +18,7 @@ The platform ensures business continuity during failures and traffic spikes.
 
 ---
 
-# Architecture Overview
+## Architecture Overview
 
 Users  
 │  
@@ -44,7 +44,7 @@ Backup CronJob (pg_dump daily)
 
 ---
 
-# Prerequisites
+## Prerequisites
 
 Ensure the following tools are installed:
 
@@ -60,7 +60,7 @@ kubectl cluster-info
 
 ---
 
-# Project Structure
+## Project Structure
 
 ```
 ha-platform-kub/
@@ -86,9 +86,9 @@ ha-platform-kub/
 
 ---
 
-# Step-by-Step Deployment Guide
+## Step-by-Step Deployment Guide
 
-## Step 1: Create Namespace
+### Step 1: Create Namespace
 
 ```bash
 kubectl apply -f k8s/namespace.yaml
@@ -97,7 +97,7 @@ kubectl get namespaces
 
 ---
 
-## Step 2: Deploy PostgreSQL StatefulSet
+### Step 2: Deploy PostgreSQL StatefulSet
 
 ```bash
 kubectl apply -f k8s/postgres-service.yaml
@@ -121,7 +121,7 @@ Expected:
 
 ---
 
-## Step 3: Enable Streaming Replication (One-Time Setup)
+### Step 3: Enable Streaming Replication (One-Time Setup)
 
 Allow replication connections:
 
@@ -200,41 +200,38 @@ manual-backup Complete 1/1
 
 #  Verification Screenshots
 
-## 🔹 Cluster Setup
+###  Cluster Setup
 ![Cluster Nodes](screenshots/1-cluster-nodes.png)
 
-## 🔹 High Availability (Pod Distribution)
+### High Availability (Pod Distribution)
 ![Pod Distribution](screenshots/2-pods-node-distribution.png)
 
-## 🔹 PostgreSQL Streaming Replication
+### PostgreSQL Streaming Replication
 ![Streaming Replication](screenshots/3-postgres-streaming-replication.png)
 
-## 🔹 Persistent Storage
+### Persistent Storage
 ![PVC Bound](screenshots/4-pvc-bound.png)
 
-## 🔹 Pod Disruption Budget
+### Pod Disruption Budget
 ![Web PDB](screenshots/6-web-pdb.png)
 
-## 🔹 Backup CronJob
+### Backup CronJob
 ![Backup CronJob](screenshots/7-backup-cronjob.png)
 
-## 🔹 Manual Backup Success
-![Backup Success](screenshots/8-backup-manual-success.png)
-
-## 🔹 Application Running
+### Application Running
 ![Application Running](screenshots/8-application-running.png)
 
-## 🔹 Health Endpoint
+### Health Endpoint
 ![Health Endpoint](screenshots/9-health-endpoint.png)
 
-## 🔹 Node Drain Eviction
+### Node Drain Eviction
 ![Node Drain](screenshots/10-node-drain-eviction.png)
 
-## 🔹 Post Drain Rescheduling
+### Post Drain Rescheduling
 ![Rescheduled Pods](screenshots/11-post-drain-rescheduling.png)
 ---
 
-# Resilience Testing
+## Resilience Testing
 
 Simulate node disruption:
 
@@ -255,7 +252,7 @@ kubectl uncordon <node-name>
 
 ---
 
-# Docker Compose Verification
+## Docker Compose Verification
 
 To verify application logic independently:
 
@@ -270,7 +267,7 @@ This ensures:
 
 ---
 
-# Production Features Implemented
+## Production Features Implemented
 
 - StatefulSet for PostgreSQL
 - VolumeClaimTemplates (1Gi per replica)
@@ -284,7 +281,7 @@ This ensures:
 
 ---
 
-# Expected Outcomes Achieved
+## Expected Outcomes Achieved
 
 - Database redundancy (1 Primary + 2 Standbys)
 - Zero downtime deployments
@@ -294,7 +291,7 @@ This ensures:
 
 ---
 
-# Conclusion
+## Conclusion
 
 This project demonstrates the design and deployment of a highly available, production-grade stateful platform on Kubernetes using best practices for:
 
@@ -307,7 +304,7 @@ The system successfully maintains business continuity under failure scenarios.
 
 ---
 
-# Author
+## Author
 
 Name: Lahari Sri  
 Project: Architect Highly Available Stateful Platform on Kubernetes
