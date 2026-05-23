@@ -2,14 +2,14 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: web-app
-  namespace: ha-platform  # Mandatory dedicated namespace
+  namespace: ha-platform
 spec:
-  replicas: 3             # Meets high availability replica count
+  replicas: 3
   strategy:
     type: RollingUpdate
     rollingUpdate:
-      maxSurge: 1         # Allows 1 extra pod during updates for zero-downtime
-      maxUnavailable: 0   # Ensures all 3 current pods stay up until new ones are ready
+      maxSurge: 1
+      maxUnavailable: 0   
   selector:
     matchLabels:
       app: web-app
@@ -20,41 +20,52 @@ spec:
     spec:
       affinity:
         podAntiAffinity:
-          # FORCED node separation (Recovers 4 points)
           requiredDuringSchedulingIgnoredDuringExecution:
-          - labelSelector:
-              matchExpressions:
-              - key: app
-                operator: In
-                values: ["web-app"]
-            topologyKey: "kubernetes.io/hostname"
+            - labelSelector:
+                matchExpressions:
+                  - key: app
+                    operator: In
+                    values: ["web-app"]
+              topologyKey: "kubernetes.io/hostname"
       containers:
-      - name: web-app
-        # Updated with your username and v1 tag for clear versioning
-        image: laharisri/web-app:v1 
-        imagePullPolicy: Always
-        env:
-        - name: DB_HOST
-          # Points to the Headless Service for internal DNS discovery
-          value: "postgres.ha-platform.svc.cluster.local"
-        ports:
-        - containerPort: 8080
-        resources:        # Fixed missing resource limits (Recovers 1 point)
-          requests:
-            cpu: "100m"
-            memory: "128Mi"
-          limits:
-            cpu: "200m"
-            memory: "256Mi"
-        livenessProbe:    # Robust health checking
-          httpGet:
-            path: /health
-            port: 8080
-          initialDelaySeconds: 5
-          periodSeconds: 10
-        readinessProbe:   # Ensures traffic only hits ready pods
-          httpGet:
-            path: /ready
-            port: 8080
-          initialDelaySeconds: 5
-          periodSeconds: 10
+        - name: web-app
+          image: laharisri/web-app:v1
+          imagePullPolicy: Always
+          env:
+            - name: DB_HOST
+              value: "postgres-0.postgres.ha-platform.svc.cluster.local"
+            - name: DB_NAME
+              value: "ha_db"
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: POSTGRES_USER
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: POSTGRES_PASSWORD
+          ports:
+            - containerPort: 8080
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "200m"
+              memory: "256Mi"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3

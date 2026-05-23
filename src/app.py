@@ -6,34 +6,19 @@ from flask import Flask, jsonify
 app = Flask(__name__)
 
 
-@app.route("/health")
-def health():
-    return "OK", 200
-
-@app.route("/ready")
-def ready():
-    try:
-        conn = get_db_connection()
-        conn.close()
-        return "READY", 200
-    except Exception:
-        return "NOT READY", 503
-
-
 def get_db_connection():
     return psycopg2.connect(
         host=os.getenv("DB_HOST", "postgres"),
-        database=os.getenv("DB_NAME", "appdb"),
+        database=os.getenv("DB_NAME", "postgres"),
         user=os.getenv("DB_USER", "postgres"),
         password=os.getenv("DB_PASSWORD", "postgres"),
         connect_timeout=5
     )
 
+
 def init_db():
-    """
-    Ensures table exists before app starts.
-    Retries until database is reachable.
-    """
+    """Create visits table on startup, retrying with backoff until DB is ready."""
+    retries = 0
     while True:
         try:
             with get_db_connection() as conn:
@@ -48,8 +33,27 @@ def init_db():
             print("Database initialized successfully.")
             break
         except Exception as e:
-            print(f"Waiting for database... {e}")
-            time.sleep(2)
+            retries += 1
+            wait = min(2 * retries, 30)  
+            print(f"Waiting for database (attempt {retries}), retrying in {wait}s... {e}")
+            time.sleep(wait)
+
+
+@app.route("/health")
+def health():
+    """Liveness probe: is the process alive?"""
+    return jsonify({"status": "up"}), 200
+
+
+@app.route("/ready")
+def ready():
+    """Readiness probe: can we reach the database?"""
+    try:
+        conn = get_db_connection()
+        conn.close()
+        return jsonify({"status": "up"}), 200
+    except Exception:
+        return jsonify({"status": "not ready"}), 503
 
 
 @app.route("/")
@@ -60,18 +64,19 @@ def index():
                 cur.execute("INSERT INTO visits DEFAULT VALUES;")
                 cur.execute("SELECT COUNT(*) FROM visits;")
                 count = cur.fetchone()[0]
+                cur.execute("SELECT version();")
+                db_version = cur.fetchone()[0]
             conn.commit()
 
         return jsonify({
             "message": "Hello from HA Platform!",
-            "total_visits": count
+            "total_visits": count,
+            "db_version": db_version,
+            "status": "success"
         }), 200
 
     except Exception as e:
-        return jsonify({
-            "error": str(e)
-        }), 500
-
+        return jsonify({"error": str(e), "status": "error"}), 500
 
 
 if __name__ == "__main__":

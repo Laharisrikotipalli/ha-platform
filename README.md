@@ -1,61 +1,35 @@
-# Architect Highly Available Stateful Platform on Kubernetes
+# Highly Available Stateful Platform on Kubernetes
 
 ## Project Overview
 
-This project demonstrates a production-grade Highly Available platform deployed on Kubernetes.
+A production-grade HA platform deployed on Kubernetes featuring:
 
-The system consists of:
-
-- Stateless Web Application (3 replicas)
-- PostgreSQL StatefulSet (1 Primary + 2 Standbys)
-- Streaming Replication
-- Persistent Storage using PVCs
-- PodDisruptionBudgets
-- Rolling Updates (Zero Downtime)
-- Automated Daily Backups using CronJob
-
-The platform ensures business continuity during failures and traffic spikes.
+- Stateless Web Application (3 replicas with anti-affinity)
+- PostgreSQL StatefulSet (1 Primary + 2 Standbys with streaming replication)
+- Persistent Storage via PVCs (1Gi per replica)
+- PodDisruptionBudgets (minAvailable: 2 for both web and DB)
+- Zero-downtime Rolling Updates
+- Automated Daily Backups via CronJob
 
 ---
 
+## Architecture
 ## Architecture Overview
 
-Users  
-│  
-▼  
-Web Service (NodePort)  
-│  
-▼  
-Web Deployment (3 replicas + anti-affinity)  
-│  
-▼  
-PostgreSQL Headless Service  
-│  
-▼  
-postgres-0 (Primary)  
-postgres-1 (Standby)  
-postgres-2 (Standby)  
-│  
-▼  
-Persistent Volume Claims (1Gi each)  
-│  
-▼  
-Backup CronJob (pg_dump daily)
+![Architecture Diagram](docs/architecture.svg)
 
 ---
 
 ## Prerequisites
 
-Ensure the following tools are installed:
-
-- Docker Desktop (or Kind / Minikube)
+- Docker Desktop
+- minikube (`curl -Lo ~/bin/minikube.exe https://github.com/kubernetes/minikube/releases/latest/download/minikube-windows-amd64.exe`)
 - kubectl
-- Git
 
-Verify Kubernetes is running:
-
+Verify cluster is running:
 ```bash
 kubectl cluster-info
+kubectl get nodes
 ```
 
 ---
@@ -63,248 +37,166 @@ kubectl cluster-info
 ## Project Structure
 
 ```
-ha-platform-kub/
-│
-├── README.md
+ha-platform/
 ├── Dockerfile
 ├── docker-compose.yml
+├── requirements.txt
+├── init-replication.sh       # Reference copy of the init script (also in configmap)
+├── README.md
 │
 ├── src/
-│   ├── app.js
-│   ├── package.json
+│   └── app.py
 │
 └── k8s/
     ├── namespace.yaml
-    ├── postgres-service.yaml
+    ├── postgres-secret.yaml
+    ├── postgres-configmap.yaml
+    ├── postgres-headless-svc.yaml
     ├── postgres-statefulset.yaml
     ├── postgres-pdb.yaml
+    ├── backup-pvc.yaml
+    ├── backup-cronjob.yaml
     ├── web-deployment.yaml
     ├── web-service.yaml
-    ├── web-pdb.yaml
-    ├── backup-cronjob.yaml
+    └── web-pdb.yaml
 ```
 
 ---
 
-## Step-by-Step Deployment Guide
+## Step-by-Step Deployment
 
-### Step 1: Create Namespace
+### Step 1 — Start cluster (3 nodes for anti-affinity)
+```bash
+minikube start --nodes 3 --driver=docker --kubernetes-version=v1.32.0
+kubectl get nodes
+```
 
+### Step 2 — Apply all manifests in order
 ```bash
 kubectl apply -f k8s/namespace.yaml
-kubectl get namespaces
-```
-
----
-
-### Step 2: Deploy PostgreSQL StatefulSet
-
-```bash
-kubectl apply -f k8s/postgres-service.yaml
-kubectl apply -f k8s/postgres-statefulset.yaml
-kubectl apply -f k8s/postgres-pdb.yaml
-```
-
-Verify:
-
-```bash
-kubectl get pods -n ha-platform
-kubectl get statefulset -n ha-platform
-kubectl get pvc -n ha-platform
-```
-
-Expected:
-- postgres-0 Running
-- postgres-1 Running
-- postgres-2 Running
-- PVCs Bound (1Gi each)
-
----
-
-### Step 3: Enable Streaming Replication (One-Time Setup)
-
-Allow replication connections:
-
-```bash
-kubectl exec -it postgres-0 -n ha-platform -- bash
-echo "host replication postgres 0.0.0.0/0 md5" >> /var/lib/postgiesql/data/pg_hba.conf
-exit
-kubectl delete pod postgres-0 -n ha-platform
-```
-
-Verify replication:
-
-```bash
-kubectl exec -it postgres-0 -n ha-platform -- \
-psql -U postgres -c "SELECT client_addr,state FROM pg_stat_replication;"
-```
-
-Expected:
-Two rows with state = streaming.
-
-Check replica mode:
-
-```bash
-kubectl exec -it postgres-1 -n ha-platform -- \
-psql -U postgres -c "SELECT pg_is_in_recovery();"
-```
-
-Expected output:
-t
-
----
-
-## Step 4: Deploy Web Application
-
-```bash
-kubectl apply -f k8s/web-deployment.yaml
+kubectl apply -f k8s/postgres-secret.yaml
+kubectl apply -f k8s/postgres-configmap.yaml
+kubectl apply -f k8s/backup-pvc.yaml
+kubectl apply -f k8s/postgres-headless-svc.yaml
 kubectl apply -f k8s/web-service.yaml
+kubectl apply -f k8s/postgres-statefulset.yaml
+kubectl apply -f k8s/web-deployment.yaml
+kubectl apply -f k8s/postgres-pdb.yaml
 kubectl apply -f k8s/web-pdb.yaml
-```
-
-Verify:
-
-```bash
-kubectl get pods -n ha-platform
-kubectl get deployment -n ha-platform
-```
-
-Expected:
-3 web pods Running.
-
----
-
-## Step 5: Deploy Backup CronJob
-
-```bash
 kubectl apply -f k8s/backup-cronjob.yaml
 ```
 
-Verify:
+### Step 3 — Watch pods come up
+```bash
+kubectl get pods -n ha-platform -w
+```
+Wait until all 6 pods show `1/1 Running` (postgres-0 starts first, then 1, then 2).
+
+### Step 4 — Verify replication
+```bash
+kubectl exec -n ha-platform postgres-0 -- psql -U postgres -c \
+  "SELECT client_addr, state, sync_state FROM pg_stat_replication;"
+```
+Expected: 2 rows with `state = streaming`.
+
+### Step 5 — Access the web app
+```bash
+minikube service web-service -n ha-platform --url
+curl http://<url>/
+curl http://<url>/health
+curl http://<url>/ready
+```
+
+---
+
+## Verification Commands
 
 ```bash
+# All pods across nodes
+kubectl get pods -n ha-platform -o wide
+
+# PVCs (3 x 1Gi Bound)
+kubectl get pvc -n ha-platform
+
+# Services (headless + NodePort)
+kubectl get svc -n ha-platform
+
+# PodDisruptionBudgets
+kubectl get pdb -n ha-platform
+
+# CronJob
 kubectl get cronjob -n ha-platform
-```
 
-Test manually:
-
-```bash
-kubectl create job --from=cronjob/postgres-backup manual-backup -n ha-platform
-kubectl get jobs -n ha-platform
-```
-
-Expected:
-manual-backup Complete 1/1
-
----
-
-#  Verification Screenshots
-
-###  Cluster Setup
-![Cluster Nodes](screenshots/1-cluster-nodes.png)
-
-### High Availability (Pod Distribution)
-![Pod Distribution](screenshots/2-pods-node-distribution.png)
-
-### PostgreSQL Streaming Replication
-![Streaming Replication](screenshots/3-postgres-streaming-replication.png)
-
-### Persistent Storage
-![PVC Bound](screenshots/4-pvc-bound.png)
-
-### Pod Disruption Budget
-![Web PDB](screenshots/6-web-pdb.png)
-
-### Backup CronJob
-![Backup CronJob](screenshots/7-backup-cronjob.png)
-
-### Application Running
-![Application Running](screenshots/8-application-running.png)
-
-### Health Endpoint
-![Health Endpoint](screenshots/9-health-endpoint.png)
-
-### Node Drain Eviction
-![Node Drain](screenshots/10-node-drain-eviction.png)
-
-### Post Drain Rescheduling
-![Rescheduled Pods](screenshots/11-post-drain-rescheduling.png)
----
-
-## Resilience Testing
-
-Simulate node disruption:
-
-```bash
-kubectl drain <node-name> --ignore-daemonsets --delete-emptydir-data
-```
-
-Observe:
-- Pods rescheduled automatically
-- Replication maintained
-- No data loss
-
-Re-enable node:
-
-```bash
-kubectl uncordon <node-name>
+# Replication status
+kubectl exec -n ha-platform postgres-0 -- psql -U postgres -c \
+  "SELECT client_addr, state, sync_state FROM pg_stat_replication;"
 ```
 
 ---
 
-## Docker Compose Verification
+## Resilience Testing (Node Drain)
 
-To verify application logic independently:
+```bash
+# Check pod placement
+kubectl get pods -n ha-platform -o wide
+
+# Drain a worker node
+kubectl drain minikube-m02 --ignore-daemonsets --delete-emptydir-data
+
+# Watch pods reschedule to healthy nodes
+kubectl get pods -n ha-platform -o wide -w
+
+# Verify replication resumed after drain
+kubectl exec -n ha-platform postgres-0 -- psql -U postgres -c \
+  "SELECT client_addr, state, sync_state FROM pg_stat_replication;"
+
+# Restore the node
+kubectl uncordon minikube-m02
+```
+
+**Expected:** Evicted pods reschedule automatically. Replication resumes with 2 streaming standbys.
+
+---
+
+## Manual Backup Test
+
+```bash
+kubectl create job --from=cronjob/postgres-backup manual-backup-test -n ha-platform
+kubectl logs -n ha-platform job/manual-backup-test
+```
+
+---
+
+## Docker Compose (Automated Logic Verification)
 
 ```bash
 docker-compose up --build
+curl http://localhost:8080/
+curl http://localhost:8080/health
+curl http://localhost:8080/ready
+docker-compose down
 ```
 
-This ensures:
-- Web connects to database
-- Schema initializes
-- Application serves traffic
-
 ---
 
-## Production Features Implemented
+## Verification Screenshots
 
-- StatefulSet for PostgreSQL
-- VolumeClaimTemplates (1Gi per replica)
-- Streaming Replication
-- PodDisruptionBudgets
-- Rolling Updates
-- Liveness & Readiness Probes
-- Pod Anti-Affinity
-- Automated Backups via CronJob
-- Persistent Storage
-
----
-
-## Expected Outcomes Achieved
-
-- Database redundancy (1 Primary + 2 Standbys)
-- Zero downtime deployments
-- Data persistence across restarts
-- Automatic failover recovery
-- Scheduled daily backups
-
----
-
-## Conclusion
-
-This project demonstrates the design and deployment of a highly available, production-grade stateful platform on Kubernetes using best practices for:
-
-- Reliability
-- Data durability
-- High availability
-- Disaster recovery
-
-The system successfully maintains business continuity under failure scenarios.
+| # | Screenshot | What it proves |
+|---|---|---|
+| 1 | `kubectl get nodes` | 3-node cluster |
+| 2 | `kubectl get pods -o wide` | Pods spread across nodes |
+| 3 | `pg_stat_replication` | 2 streaming standbys |
+| 4 | `kubectl get pvc` | 3 PVCs Bound |
+| 5 | `kubectl get pdb` | PDBs with minAvailable: 2 |
+| 6 | `kubectl get cronjob` | Daily backup scheduled |
+| 7 | `curl /` `/health` `/ready` | Web app working |
+| 8 | `kubectl drain` output | Node eviction |
+| 9 | Pods after drain | Rescheduled to healthy nodes |
+| 10 | `pg_stat_replication` after drain | Replication resumed |
 
 ---
 
 ## Author
 
-Name: Lahari Sri  
+Name: Lahari Sri
 Project: Architect Highly Available Stateful Platform on Kubernetes

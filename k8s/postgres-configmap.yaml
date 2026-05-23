@@ -3,27 +3,73 @@ kind: ConfigMap
 metadata:
   name: postgres-init-scripts
   namespace: ha-platform
-# Inside k8s/postgres-configmap.yaml
 data:
   init-replication.sh: |
     #!/bin/bash
     set -e
+
+    # Extract ordinal from pod hostname (e.g. postgres-0 -> 0)
     [[ `hostname` =~ -([0-9]+)$ ]] || exit 1
     ordinal=${BASH_REMATCH[1]}
+    echo "==> Hostname: $(hostname), Ordinal: $ordinal"
 
     if [[ $ordinal -eq 0 ]]; then
-      echo "Configuring Primary..."
-      # ALLOW replication connections from the internal network
-      echo "host replication all 0.0.0.0/0 trust" >> "$PGDATA/pg_hba.conf"
-      # Ensure the primary is listening on all interfaces
-      echo "listen_addresses='*'" >> "$PGDATA/postgresql.conf"
-    else
-      echo "Initializing as Standby... Waiting for primary."
-      until pg_isready -h postgres-0.postgres.ha-platform.svc.cluster.local; do
-        sleep 2
-      done
-      if [ ! -s "$PGDATA/PG_VERSION" ]; then
-        echo "Cloning data from primary..."
-        pg_basebackup -h postgres-0.postgres.ha-platform.svc.cluster.local -D $PGDATA -U $POSTGRES_USER -vP -R
+      echo "==> Configuring as PRIMARY"
+
+      if [ -f "$PGDATA/PG_VERSION" ]; then
+        echo "Already initialized, skipping initdb."
+      else
+        echo "Initializing primary data directory..."
+        chmod 777 /var/lib/postgresql/data
+        mkdir -p "$PGDATA"
+        chown -R postgres:postgres /var/lib/postgresql/data
+        chmod 700 "$PGDATA"
+        su -m postgres -c "initdb -D $PGDATA"
       fi
+
+      # Overwrite pg_hba.conf with clean trust-based auth
+      printf 'local all all trust\nhost all all 0.0.0.0/0 trust\nhost replication all 0.0.0.0/0 trust\nlocal replication all trust\n' > "$PGDATA/pg_hba.conf"
+      echo "pg_hba.conf updated."
+
+      # Apply replication settings idempotently
+      grep -qxF "listen_addresses='*'" "$PGDATA/postgresql.conf" \
+        || echo "listen_addresses='*'" >> "$PGDATA/postgresql.conf"
+      grep -qxF "wal_level = replica" "$PGDATA/postgresql.conf" \
+        || echo "wal_level = replica" >> "$PGDATA/postgresql.conf"
+      grep -qxF "max_wal_senders = 10" "$PGDATA/postgresql.conf" \
+        || echo "max_wal_senders = 10" >> "$PGDATA/postgresql.conf"
+      grep -qxF "wal_keep_size = 64" "$PGDATA/postgresql.conf" \
+        || echo "wal_keep_size = 64" >> "$PGDATA/postgresql.conf"
+      grep -qxF "hot_standby = on" "$PGDATA/postgresql.conf" \
+        || echo "hot_standby = on" >> "$PGDATA/postgresql.conf"
+
+      echo "Primary configuration complete."
+
+    else
+      echo "==> Configuring as STANDBY $ordinal"
+
+      if [ -f "$PGDATA/PG_VERSION" ]; then
+        echo "Already initialized, skipping pg_basebackup."
+        exit 0
+      fi
+
+      echo "Waiting for primary to be ready..."
+      until pg_isready -h postgres-0.postgres.ha-platform.svc.cluster.local -U postgres; do
+        echo "  Primary not ready, retrying in 3s..."
+        sleep 3
+      done
+
+      echo "Primary is ready. Cloning via pg_basebackup..."
+      chmod 777 /var/lib/postgresql/data
+      mkdir -p "$PGDATA"
+      chown -R postgres:postgres /var/lib/postgresql/data
+
+      su -m postgres -c "PGPASSWORD=$POSTGRES_PASSWORD pg_basebackup \
+        -h postgres-0.postgres.ha-platform.svc.cluster.local \
+        -D $PGDATA \
+        -U postgres \
+        -vP -R \
+        --wal-method=stream"
+
+      echo "Standby clone complete."
     fi
