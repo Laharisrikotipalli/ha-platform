@@ -326,5 +326,5 @@ What to expect:
 
 ## Author
 
-Lahari Sri
+**Lahari Sri**
 Project: Architect Highly Available Stateful Platform on Kubernetes
