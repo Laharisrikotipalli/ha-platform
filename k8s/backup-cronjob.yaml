@@ -1,0 +1,39 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: postgres-backup
+  namespace: ha-platform
+spec:
+  schedule: "0 0 * * *"   # Daily at midnight
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app: postgres-backup
+        spec:
+          containers:
+            - name: backup
+              image: postgres:15-alpine
+              envFrom:
+                - secretRef:
+                    name: postgres-secret
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  export PGPASSWORD=$POSTGRES_PASSWORD
+                  pg_dump \
+                    -h postgres-0.postgres.ha-platform.svc.cluster.local \
+                    -U $POSTGRES_USER \
+                    $POSTGRES_DB \
+                    > /backups/db-$(date +%Y%m%d-%H%M%S).sql
+                  echo "Backup complete: db-$(date +%Y%m%d-%H%M%S).sql"
+              volumeMounts:
+                - name: backup-vol
+                  mountPath: /backups
+          restartPolicy: OnFailure
+          volumes:
+            - name: backup-vol
+              persistentVolumeClaim:
+                claimName: backup-pvc

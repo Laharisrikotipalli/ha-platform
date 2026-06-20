@@ -1,0 +1,18 @@
+﻿apiVersion: v1
+kind: Pod
+metadata:
+  name: pvc-inspector
+  namespace: ha-platform
+spec:
+  restartPolicy: Never
+  volumes:
+  - name: backup
+    persistentVolumeClaim:
+      claimName: backup-pvc
+  containers:
+  - name: inspector
+    image: busybox
+    command: ["ls", "-lh", "/backup"]
+    volumeMounts:
+    - mountPath: /backup
+      name: backup
